@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_App\\OcelotGateway\\OcelotGateway.csproj": {}
+    "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_Like\\OcelotGateway\\OcelotGateway.csproj": {}
   },
   "projects": {
-    "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_App\\OcelotGateway\\OcelotGateway.csproj": {
+    "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_Like\\OcelotGateway\\OcelotGateway.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_App\\OcelotGateway\\OcelotGateway.csproj",
+        "projectUniqueName": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_Like\\OcelotGateway\\OcelotGateway.csproj",
         "projectName": "OcelotGateway",
-        "projectPath": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_App\\OcelotGateway\\OcelotGateway.csproj",
+        "projectPath": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_Like\\OcelotGateway\\OcelotGateway.csproj",
         "packagesPath": "C:\\Users\\charm\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_App\\OcelotGateway\\obj\\",
+        "outputPath": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_Like\\OcelotGateway\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\charm\\AppData\\Roaming\\NuGet\\NuGet.Config",

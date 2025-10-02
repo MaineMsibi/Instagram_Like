@@ -80,11 +80,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_App\\UserService\\UserService.csproj",
+      "projectUniqueName": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_Like\\UserService\\UserService.csproj",
       "projectName": "UserService",
-      "projectPath": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_App\\UserService\\UserService.csproj",
+      "projectPath": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_Like\\UserService\\UserService.csproj",
       "packagesPath": "C:\\Users\\charm\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_App\\UserService\\obj\\",
+      "outputPath": "C:\\Users\\charm\\OneDrive\\Desktop\\Instagram_Like\\UserService\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\charm\\AppData\\Roaming\\NuGet\\NuGet.Config",
