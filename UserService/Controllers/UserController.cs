@@ -17,16 +17,16 @@ namespace UserService.Controllers
             _logger = logger;
         }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetUser(int id)
+        [HttpGet("{userId}")]
+        public async Task<IActionResult> GetUser(int userId)
         {
             try
             {
                 await using var session = _driver.AsyncSession();
                 var result = await session.RunAsync(@"
-            MATCH (u:User {id: $id})
-            RETURN u.name AS name",
-                    new { id });
+                    MATCH (u:User {user_id: $userId})
+                    RETURN u.name AS name",
+                    new { userId});
 
                 var records = await result.ToListAsync();  // Fetch all (expected: 0 or 1)
                 if (records.Count == 0)
@@ -34,11 +34,11 @@ namespace UserService.Controllers
 
                 var record = records[0];  // Take the first (only) record
                 var name = record["name"].As<string>();
-                return Ok(new { Id = id, Name = name });
+                return Ok(new { UserId = userId, Name = name });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching user {Id}", id);
+                _logger.LogError(ex, "Error fetching user {userId}", userId);
                 return StatusCode(500, "Internal server error");
             }
 
