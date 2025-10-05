@@ -3,6 +3,16 @@ using Ocelot.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // Add Ocelot configuration
 builder.Configuration
     .SetBasePath(builder.Environment.ContentRootPath)
@@ -18,6 +28,8 @@ if (builder.Environment.IsDevelopment())
 }
 
 var app = builder.Build();
+
+app.UseCors();
 
 // Use Ocelot middleware
 await app.UseOcelot();

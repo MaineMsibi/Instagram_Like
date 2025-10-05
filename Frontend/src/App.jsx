@@ -1,47 +1,101 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User, Users, Edit, Plus, Search } from 'lucide-react';
+
+const API_BASE = 'http://localhost:5272';  // Ocelot Gateway
 
 function App() {
   const [activeTab, setActiveTab] = useState('view');
-  const [users, setUsers] = useState([
-    { id: '1', username: 'john_doe', email: 'john@example.com', followers: 1250, following: 342 },
-    { id: '2', username: 'jane_smith', email: 'jane@example.com', followers: 3420, following: 892 }
-  ]);
+  const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [formData, setFormData] = useState({ username: '', email: '', bio: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    bio: ''
-  });
+  // Load users on mount or view tab
+  useEffect(() => {
+    if (activeTab === 'view') {
+      fetchUsers();
+    }
+  }, [activeTab]);
 
-  const handleCreateUser = (e) => {
-    e.preventDefault();
-    const newUser = {
-      id: Date.now().toString(),
-      ...formData,
-      followers: 0,
-      following: 0
-    };
-    setUsers([...users, newUser]);
-    setFormData({ username: '', email: '', bio: '' });
-    setActiveTab('view');
+  const fetchUsers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/users`);
+      if (!response.ok) throw new Error('Failed to fetch users');
+      const data = await response.json();
+      setUsers(data);  // Backend returns full objects: id, username, email, name, bio, followers, following
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdateUser = (e) => {
+  const handleCreateUser = async (e) => {
     e.preventDefault();
-    setUsers(users.map(u => u.id === selectedUser.id ? { ...u, ...formData } : u));
-    setSelectedUser(null);
-    setFormData({ username: '', email: '', bio: '' });
-    setActiveTab('view');
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = {
+        userId: Date.now(),  // Backend generates if needed
+        name: formData.username,  // Map UI username to backend name
+        username: formData.username,
+        email: formData.email,
+        bio: formData.bio
+      };
+      const response = await fetch(`${API_BASE}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error('Failed to create user');
+      const newUser = await response.json();
+      setUsers([...users, newUser]);
+      setFormData({ username: '', email: '', bio: '' });
+      setActiveTab('view');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = {
+        name: formData.username,
+        username: formData.username,
+        bio: formData.bio
+      };
+      const response = await fetch(`${API_BASE}/users/${selectedUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error('Failed to update user');
+      const updatedUser = await response.json();
+      setUsers(users.map(u => u.id === selectedUser.id ? updatedUser : u));
+      setSelectedUser(null);
+      setFormData({ username: '', email: '', bio: '' });
+      setActiveTab('view');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const startEdit = (user) => {
     setSelectedUser(user);
     setFormData({
       username: user.username,
-      email: user.email,
+      email: user.email || '',
       bio: user.bio || ''
     });
     setActiveTab('edit');
@@ -50,6 +104,9 @@ function App() {
   const filteredUsers = users.filter(u => 
     u.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (loading) return <div style={{ textAlign: 'center', padding: '2rem' }}>Loading users...</div>;
+  if (error) return <div style={{ textAlign: 'center', padding: '2rem', color: 'red' }}>Error: {error}</div>;
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>

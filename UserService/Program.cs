@@ -3,6 +3,16 @@ using Neo4j.Driver;              // For GraphDatabase and IDriver
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("http://localhost:5174", "http://localhost:5173")  // Your React dev server
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // Add Swagger services
 builder.Services.AddEndpointsApiExplorer();  // Generates OpenAPI metadata
 builder.Services.AddSwaggerGen(c =>
@@ -30,6 +40,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/swagger/v1/swagger.json", "UserService API v1"));
 }
+
+app.UseCors();
 
 // Enable routing (good practice for controllers)
 app.UseRouting();
