@@ -74,6 +74,7 @@ function App() {
       const payload = {
         name: formData.username,
         username: formData.username,
+        email: formData.email,
         bio: formData.bio
       };
       const response = await fetch(`${API_BASE}/users/${selectedUser.id}`, {
