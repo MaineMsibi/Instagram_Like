@@ -100,12 +100,20 @@ namespace UserService.Controllers
 
                 await using var session = _driver.AsyncSession();
                 
-                // FIXED: Auto-generate user_id by finding max and adding 1
-                var result = await session.RunAsync(@"
+                // FIXED: Auto-generate user_id by finding max existing ID and adding 1
+                // Step 1: Get the next available ID
+                var maxIdResult = await session.RunAsync(@"
                     MATCH (u:User)
-                    WITH COALESCE(MAX(u.user_id), 0) + 1 AS nextId
+                    RETURN MAX(u.user_id) AS maxId");
+                
+                var maxIdRecord = await maxIdResult.SingleAsync();
+                var maxId = maxIdRecord["maxId"].As<int?>();
+                var nextId = (maxId ?? -1) + 1;
+                
+                // Step 2: Create the user with the next ID
+                var result = await session.RunAsync(@"
                     CREATE (newUser:User {
-                        user_id: nextId, 
+                        user_id: $userId, 
                         username: $username, 
                         full_name: $name, 
                         location: $location, 
@@ -119,6 +127,7 @@ namespace UserService.Controllers
                            newUser.joined AS joined, 
                            newUser.bio AS bio",
                     new { 
+                        userId = nextId,
                         username = dto.Username, 
                         name = dto.Name, 
                         location = dto.Email?.Split('@')[0] ?? "Unknown", 
