@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Users, Edit, Plus, Search } from 'lucide-react';
+import { User, Users, Edit, Plus, Search, Eye, Users2 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5272';  // Ocelot Gateway
 
@@ -11,6 +11,11 @@ function App() {
   const [formData, setFormData] = useState({ username: '', email: '', bio: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // NEW: States for user details (followers/following)
+  const [followers, setFollowers] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [activeSubTab, setActiveSubTab] = useState('followers');
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   // Load users on mount or view tab
   useEffect(() => {
@@ -33,6 +38,44 @@ function App() {
       setLoading(false);
     }
   };
+
+  // NEW: Fetch followers for a user
+  const fetchFollowers = async (userId) => {
+    setDetailsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/users/${userId}/followers`);
+      if (!response.ok) throw new Error('Failed to fetch followers');
+      const data = await response.json();
+      setFollowers(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  // NEW: Fetch following for a user
+  const fetchFollowing = async (userId) => {
+    setDetailsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/users/${userId}/following`);
+      if (!response.ok) throw new Error('Failed to fetch following');
+      const data = await response.json();
+      setFollowing(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  // NEW: Load details when entering details tab
+  useEffect(() => {
+    if (activeTab === 'details' && selectedUser) {
+      fetchFollowers(selectedUser.id);
+      fetchFollowing(selectedUser.id);
+    }
+  }, [activeTab]);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -105,8 +148,35 @@ function App() {
     setActiveTab('edit');
   };
 
+  // NEW: Start viewing details
+  const startDetails = (user) => {
+    setSelectedUser(user);
+    setActiveTab('details');
+  };
+
   const filteredUsers = users.filter(u => 
     u.username.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // NEW: Render user list for followers/following (compact)
+  const renderUserList = (userList, title) => (
+    <div>
+      <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#111827', marginBottom: '1rem' }}>{title}</h3>
+      {userList.length === 0 ? (
+        <p style={{ color: '#6b7280', textAlign: 'center', padding: '2rem' }}>No {title.toLowerCase()} yet.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+          {userList.map((u) => (
+            <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '0.375rem', backgroundColor: '#f9fafb' }}>
+              <div style={{ width: '2rem', height: '2rem', background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.875rem', fontWeight: 'bold' }}>
+                {u.username.charAt(0).toUpperCase()}
+              </div>
+              <span style={{ fontWeight: '500', color: '#111827' }}>@{u.username}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 
   return (
@@ -211,6 +281,24 @@ function App() {
                 </div>
               </button>
             )}
+            {activeTab === 'details' && selectedUser && (
+              <button
+                style={{
+                  flex: 1,
+                  padding: '1rem 1.5rem',
+                  fontWeight: '500',
+                  border: 'none',
+                  background: 'none',
+                  color: '#9333ea',
+                  borderBottom: '2px solid #9333ea'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                  <Eye style={{ width: '1.25rem', height: '1.25rem' }} />
+                  User Details
+                </div>
+              </button>
+            )}
           </div>
 
           <div style={{ padding: '1.5rem' }}>
@@ -303,22 +391,41 @@ function App() {
                           </div>
                         </div>
                         
-                        <button
-                          onClick={() => startEdit(user)}
-                          style={{
-                            color: '#9333ea',
-                            padding: '0.5rem',
-                            borderRadius: '0.5rem',
-                            border: 'none',
-                            background: 'none',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s'
-                          }}
-                          onMouseEnter={(e) => e.target.style.backgroundColor = '#faf5ff'}
-                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                        >
-                          <Edit style={{ width: '1.25rem', height: '1.25rem' }} />
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          {/* NEW: View Details Button */}
+                          <button
+                            onClick={() => startDetails(user)}
+                            style={{
+                              color: '#9333ea',
+                              padding: '0.5rem',
+                              borderRadius: '0.5rem',
+                              border: 'none',
+                              background: 'none',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = '#faf5ff'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                          >
+                            <Eye style={{ width: '1.25rem', height: '1.25rem' }} />
+                          </button>
+                          <button
+                            onClick={() => startEdit(user)}
+                            style={{
+                              color: '#9333ea',
+                              padding: '0.5rem',
+                              borderRadius: '0.5rem',
+                              border: 'none',
+                              background: 'none',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = '#faf5ff'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                          >
+                            <Edit style={{ width: '1.25rem', height: '1.25rem' }} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -329,6 +436,100 @@ function App() {
                     No users found
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* NEW: User Details Tab */}
+            {activeTab === 'details' && selectedUser && !detailsLoading && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div style={{
+                    width: '3rem',
+                    height: '3rem',
+                    background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '1.125rem'
+                  }}>
+                    {selectedUser.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h2 style={{ fontWeight: '600', color: '#111827' }}>@{selectedUser.username}</h2>
+                    <p style={{ color: '#6b7280' }}>{selectedUser.email}</p>
+                  </div>
+                </div>
+                {selectedUser.bio && (
+                  <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1.5rem' }}>
+                    {selectedUser.bio}
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: '2rem', marginBottom: '2rem', fontSize: '0.875rem' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <span style={{ fontWeight: '600', color: '#111827', display: 'block' }}>{selectedUser.followers}</span>
+                    <span style={{ color: '#6b7280' }}>followers</span>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <span style={{ fontWeight: '600', color: '#111827', display: 'block' }}>{selectedUser.following}</span>
+                    <span style={{ color: '#6b7280' }}>following</span>
+                  </div>
+                </div>
+                {/* NEW: Sub-tabs for Followers/Following */}
+                <div style={{ borderBottom: '1px solid #e5e7eb', marginBottom: '1rem' }}>
+                  <button
+                    onClick={() => setActiveSubTab('followers')}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      fontWeight: '500',
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      color: activeSubTab === 'followers' ? '#9333ea' : '#6b7280',
+                      borderBottom: activeSubTab === 'followers' ? '2px solid #9333ea' : 'none',
+                      transition: 'color 0.2s'
+                    }}
+                  >
+                    Followers
+                  </button>
+                  <button
+                    onClick={() => setActiveSubTab('following')}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      fontWeight: '500',
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      color: activeSubTab === 'following' ? '#9333ea' : '#6b7280',
+                      borderBottom: activeSubTab === 'following' ? '2px solid #9333ea' : 'none',
+                      transition: 'color 0.2s'
+                    }}
+                  >
+                    Following
+                  </button>
+                </div>
+                {activeSubTab === 'followers' && renderUserList(followers, `${selectedUser.followers} Followers`)}
+                {activeSubTab === 'following' && renderUserList(following, `${selectedUser.following} Following`)}
+                <button
+                  onClick={() => setActiveTab('view')}
+                  style={{
+                    marginTop: '1.5rem',
+                    backgroundColor: '#e5e7eb',
+                    color: '#374151',
+                    padding: '0.75rem 1.5rem',
+                    borderRadius: '0.5rem',
+                    fontWeight: '500',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#d1d5db'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = '#e5e7eb'}
+                >
+                  Back to Users
+                </button>
               </div>
             )}
 
