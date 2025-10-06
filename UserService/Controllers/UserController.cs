@@ -86,25 +86,50 @@ namespace UserService.Controllers
             }
         }
 
-        // NEW: POST /api/Users - Create user
+        // POST /api/Users - Create user with auto-increment ID
         [HttpPost]
         public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
         {
             try
             {
+                // Validate input
+                if (string.IsNullOrWhiteSpace(dto.Username))
+                    return BadRequest("Username is required");
+                if (string.IsNullOrWhiteSpace(dto.Email))
+                    return BadRequest("Email is required");
+
                 await using var session = _driver.AsyncSession();
-                await using var tx = await session.BeginTransactionAsync();
-                var result = await tx.RunAsync(@"
-                    CREATE (u:User {user_id: $userId, username: $username, full_name: $name, location: $location, joined: datetime(), bio: $bio})
-                    RETURN u.user_id AS userId, u.username AS username, u.full_name AS name, u.location AS location, u.joined AS joined, u.bio AS bio",
-                    new { userId = dto.UserId, username = dto.Username, name = dto.Name, location = dto.Email?.Split('@')[0] ?? "Unknown", bio = dto.Bio ?? "" });
+                
+                // FIXED: Auto-generate user_id by finding max and adding 1
+                var result = await session.RunAsync(@"
+                    MATCH (u:User)
+                    WITH COALESCE(MAX(u.user_id), 0) + 1 AS nextId
+                    CREATE (newUser:User {
+                        user_id: nextId, 
+                        username: $username, 
+                        full_name: $name, 
+                        location: $location, 
+                        joined: datetime(), 
+                        bio: $bio
+                    })
+                    RETURN newUser.user_id AS userId, 
+                           newUser.username AS username, 
+                           newUser.full_name AS name, 
+                           newUser.location AS location, 
+                           newUser.joined AS joined, 
+                           newUser.bio AS bio",
+                    new { 
+                        username = dto.Username, 
+                        name = dto.Name, 
+                        location = dto.Email?.Split('@')[0] ?? "Unknown", 
+                        bio = dto.Bio ?? "" 
+                    });
 
                 var record = await result.SingleAsync();
-                await tx.CommitAsync();
 
                 var newUser = new
                 {
-                    Id = record["userId"].As<int>().ToString(),
+                    Id = record["userId"].As<int>(),
                     Username = record["username"].As<string>(),
                     Email = record["location"].As<string>() + "@example.com",
                     Name = record["name"].As<string>(),
@@ -112,14 +137,16 @@ namespace UserService.Controllers
                     Followers = 0,
                     Following = 0
                 };
+                
                 return CreatedAtAction(nameof(GetUser), new { userId = newUser.Id }, newUser);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating user");
-                return StatusCode(500, "Internal server error");
+                return StatusCode(500, $"Internal server error: {ex.Message}");
             }
         }
+
 
         // NEW: PUT /api/Users/{userId} - Update user
         [HttpPut("{userId}")]

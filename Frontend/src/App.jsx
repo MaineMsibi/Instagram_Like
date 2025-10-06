@@ -26,7 +26,7 @@ function App() {
       const response = await fetch(`${API_BASE}/users`);
       if (!response.ok) throw new Error('Failed to fetch users');
       const data = await response.json();
-      setUsers(data);  // Backend returns full objects: id, username, email, name, bio, followers, following
+      setUsers(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -39,9 +39,9 @@ function App() {
     setLoading(true);
     setError(null);
     try {
+      // FIXED: Removed userId - backend will auto-generate
       const payload = {
-        userId: Date.now(),  // Backend generates if needed
-        name: formData.username,  // Map UI username to backend name
+        name: formData.username,
         username: formData.username,
         email: formData.email,
         bio: formData.bio
@@ -51,7 +51,10 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!response.ok) throw new Error('Failed to create user');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to create user: ${errorText}`);
+      }
       const newUser = await response.json();
       setUsers([...users, newUser]);
       setFormData({ username: '', email: '', bio: '' });
@@ -105,9 +108,6 @@ function App() {
     u.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) return <div style={{ textAlign: 'center', padding: '2rem' }}>Loading users...</div>;
-  if (error) return <div style={{ textAlign: 'center', padding: '2rem', color: 'red' }}>Error: {error}</div>;
-
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
       <div style={{ maxWidth: '64rem', margin: '0 auto', padding: '1.5rem' }}>
@@ -125,6 +125,27 @@ function App() {
           </div>
           <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>Manage users for your Instagram-like application</p>
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div style={{
+            backgroundColor: '#fee2e2',
+            border: '1px solid #fecaca',
+            borderRadius: '0.5rem',
+            padding: '1rem',
+            marginBottom: '1.5rem',
+            color: '#991b1b'
+          }}>
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
+            Loading...
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={{ backgroundColor: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)', marginBottom: '1.5rem' }}>
@@ -193,7 +214,7 @@ function App() {
 
           <div style={{ padding: '1.5rem' }}>
             {/* View Users Tab */}
-            {activeTab === 'view' && (
+            {activeTab === 'view' && !loading && (
               <div>
                 <div style={{ marginBottom: '1.5rem' }}>
                   <div style={{ position: 'relative' }}>
@@ -263,6 +284,12 @@ function App() {
                             </div>
                           </div>
                           
+                          {user.bio && (
+                            <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                              {user.bio}
+                            </p>
+                          )}
+                          
                           <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', fontSize: '0.875rem' }}>
                             <div>
                               <span style={{ fontWeight: '600', color: '#111827' }}>{user.followers}</span>
@@ -305,7 +332,7 @@ function App() {
             )}
 
             {/* Create User Tab */}
-            {activeTab === 'create' && (
+            {activeTab === 'create' && !loading && (
               <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
@@ -379,6 +406,7 @@ function App() {
 
                 <button
                   type="submit"
+                  disabled={loading}
                   style={{
                     width: '100%',
                     backgroundColor: '#9333ea',
@@ -387,19 +415,20 @@ function App() {
                     borderRadius: '0.5rem',
                     fontWeight: '500',
                     border: 'none',
-                    cursor: 'pointer',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    opacity: loading ? 0.6 : 1,
                     transition: 'background-color 0.2s'
                   }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#7e22ce'}
+                  onMouseEnter={(e) => !loading && (e.target.style.backgroundColor = '#7e22ce')}
                   onMouseLeave={(e) => e.target.style.backgroundColor = '#9333ea'}
                 >
-                  Create User
+                  {loading ? 'Creating...' : 'Create User'}
                 </button>
               </form>
             )}
 
             {/* Edit User Tab */}
-            {activeTab === 'edit' && selectedUser && (
+            {activeTab === 'edit' && selectedUser && !loading && (
               <form onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
@@ -471,6 +500,7 @@ function App() {
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <button
                     type="submit"
+                    disabled={loading}
                     style={{
                       flex: 1,
                       backgroundColor: '#9333ea',
@@ -479,13 +509,14 @@ function App() {
                       borderRadius: '0.5rem',
                       fontWeight: '500',
                       border: 'none',
-                      cursor: 'pointer',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      opacity: loading ? 0.6 : 1,
                       transition: 'background-color 0.2s'
                     }}
-                    onMouseEnter={(e) => e.target.style.backgroundColor = '#7e22ce'}
+                    onMouseEnter={(e) => !loading && (e.target.style.backgroundColor = '#7e22ce')}
                     onMouseLeave={(e) => e.target.style.backgroundColor = '#9333ea'}
                   >
-                    Update User
+                    {loading ? 'Updating...' : 'Update User'}
                   </button>
                   <button
                     type="button"
