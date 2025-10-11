@@ -15,6 +15,7 @@ function App() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({ username: '', email: '', bio: '' });
+  const [editUserPassword, setEditUserPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [followers, setFollowers] = useState([]);
@@ -229,6 +230,7 @@ function App() {
         name: formData.username,
         username: formData.username,
         email: formData.email,
+        password: editUserPassword,
         bio: formData.bio
       };
       const response = await fetch(`${API_BASE}/users/${selectedUser.id}`, {
@@ -241,6 +243,7 @@ function App() {
       setUsers(users.map(u => u.id === selectedUser.id ? updatedUser : u));
       setSelectedUser(null);
       setFormData({ username: '', email: '', bio: '' });
+      setEditUserPassword('');
       setActiveTab('view');
     } catch (err) {
       setError(err.message);
@@ -256,6 +259,7 @@ function App() {
       email: user.email || '',
       bio: user.bio || ''
     });
+    setEditUserPassword(user.password || '');
     setActiveTab('edit');
   };
 
@@ -962,6 +966,27 @@ function App() {
                   />
                 </div>
 
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                    Password
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editUserPassword}
+                    onChange={(e) => setEditUserPassword(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 1rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.5rem',
+                      fontSize: '1rem',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#9333ea'}
+                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  />
+                </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
                     Bio
