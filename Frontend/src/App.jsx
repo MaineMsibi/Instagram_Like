@@ -8,6 +8,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState(null);
+  const [createUserPassword, setCreateUserPassword] = useState('');
 
   const [activeTab, setActiveTab] = useState('view');
   const [users, setUsers] = useState([]);
@@ -32,13 +33,21 @@ function App() {
       return;
     }
 
+    if (!loginForm.password.trim()) {
+      setLoginError('Password is required');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE}/users`);
       if (!response.ok) throw new Error('Failed to fetch users');
       const allUsers = await response.json();
       
-      const user = allUsers.find(u => u.username.toLowerCase() === loginForm.username.toLowerCase());
+      const user = allUsers.find(u => 
+        u.username.toLowerCase() === loginForm.username.toLowerCase() && 
+        u.password === loginForm.password
+      );
       
       if (user) {
         setCurrentUser(user);
@@ -46,7 +55,7 @@ function App() {
         setLoginForm({ username: '', password: '' });
         fetchFollowingForUser(user.id);
       } else {
-        setLoginError('User not found');
+        setLoginError('Invalid username or password');
       }
     } catch (err) {
       setLoginError(err.message);
@@ -187,6 +196,7 @@ function App() {
         name: formData.username,
         username: formData.username,
         email: formData.email,
+        password: createUserPassword,
         bio: formData.bio
       };
       const response = await fetch(`${API_BASE}/users`, {
@@ -201,6 +211,7 @@ function App() {
       const newUser = await response.json();
       setUsers([...users, newUser]);
       setFormData({ username: '', email: '', bio: '' });
+      setCreateUserPassword('');
       setActiveTab('view');
     } catch (err) {
       setError(err.message);
@@ -326,6 +337,29 @@ function App() {
                     outline: 'none'
                   }}
                   placeholder="Enter your username"
+                  onFocus={(e) => e.target.style.borderColor = '#9333ea'}
+                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.5rem',
+                    fontSize: '1rem',
+                    outline: 'none'
+                  }}
+                  placeholder="Enter your password"
                   onFocus={(e) => e.target.style.borderColor = '#9333ea'}
                   onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
                 />
@@ -806,6 +840,29 @@ function App() {
                       outline: 'none'
                     }}
                     placeholder="Enter email"
+                    onFocus={(e) => e.target.style.borderColor = '#9333ea'}
+                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={createUserPassword}
+                    onChange={(e) => setCreateUserPassword(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 1rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.5rem',
+                      fontSize: '1rem',
+                      outline: 'none'
+                    }}
+                    placeholder="Enter password"
                     onFocus={(e) => e.target.style.borderColor = '#9333ea'}
                     onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
                   />
