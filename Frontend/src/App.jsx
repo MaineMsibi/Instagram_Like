@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
-import { User, Users, Edit, Plus, Search, Eye, Users2 } from 'lucide-react';
+import { User, Users, Edit, Plus, Search, Eye, LogOut } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5272';  // Ocelot Gateway
 
 function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState(null);
+
   const [activeTab, setActiveTab] = useState('view');
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -11,18 +16,117 @@ function App() {
   const [formData, setFormData] = useState({ username: '', email: '', bio: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // NEW: States for user details (followers/following)
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
   const [activeSubTab, setActiveSubTab] = useState('followers');
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [followingMap, setFollowingMap] = useState({});
+
+  // Login handler
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError(null);
+    
+    if (!loginForm.username.trim()) {
+      setLoginError('Username is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/users`);
+      if (!response.ok) throw new Error('Failed to fetch users');
+      const allUsers = await response.json();
+      
+      const user = allUsers.find(u => u.username.toLowerCase() === loginForm.username.toLowerCase());
+      
+      if (user) {
+        setCurrentUser(user);
+        setIsLoggedIn(true);
+        setLoginForm({ username: '', password: '' });
+        fetchFollowingForUser(user.id);
+      } else {
+        setLoginError('User not found');
+      }
+    } catch (err) {
+      setLoginError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    setLoginForm({ username: '', password: '' });
+    setFollowingMap({});
+    setActiveTab('view');
+  };
+
+  // Fetch who the current user is following
+  const fetchFollowingForUser = async (userId) => {
+    try {
+      const response = await fetch(`${API_BASE}/users/${userId}/following`);
+      if (!response.ok) return;
+      const data = await response.json();
+      const map = {};
+      data.forEach(u => map[u.id] = true);
+      setFollowingMap(map);
+    } catch (err) {
+      console.error('Error fetching following:', err);
+    }
+  };
+
+  // Follow a user
+  const handleFollow = async (userId) => {
+    if (!currentUser) return;
+    
+    try {
+      const response = await fetch(`${API_BASE}/users/${currentUser.id}/follow/${userId}`, {
+        method: 'POST'
+      });
+      if (!response.ok) throw new Error('Failed to follow user');
+      
+      setFollowingMap({ ...followingMap, [userId]: true });
+      // Update the users list to reflect the new following count
+      fetchUsers();
+      if (selectedUser) {
+        fetchFollowers(selectedUser.id);
+      }
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Unfollow a user
+  const handleUnfollow = async (userId) => {
+    if (!currentUser) return;
+    
+    try {
+      const response = await fetch(`${API_BASE}/users/${currentUser.id}/unfollow/${userId}`, {
+        method: 'POST'
+      });
+      if (!response.ok) throw new Error('Failed to unfollow user');
+      
+      const newMap = { ...followingMap };
+      delete newMap[userId];
+      setFollowingMap(newMap);
+      // Update the users list to reflect the new following count
+      fetchUsers();
+      if (selectedUser) {
+        fetchFollowers(selectedUser.id);
+      }
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   // Load users on mount or view tab
   useEffect(() => {
-    if (activeTab === 'view') {
+    if (activeTab === 'view' && isLoggedIn) {
       fetchUsers();
     }
-  }, [activeTab]);
+  }, [activeTab, isLoggedIn]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -39,7 +143,6 @@ function App() {
     }
   };
 
-  // NEW: Fetch followers for a user
   const fetchFollowers = async (userId) => {
     setDetailsLoading(true);
     try {
@@ -54,7 +157,6 @@ function App() {
     }
   };
 
-  // NEW: Fetch following for a user
   const fetchFollowing = async (userId) => {
     setDetailsLoading(true);
     try {
@@ -69,7 +171,6 @@ function App() {
     }
   };
 
-  // NEW: Load details when entering details tab
   useEffect(() => {
     if (activeTab === 'details' && selectedUser) {
       fetchFollowers(selectedUser.id);
@@ -82,7 +183,6 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      // FIXED: Removed userId - backend will auto-generate
       const payload = {
         name: formData.username,
         username: formData.username,
@@ -148,7 +248,6 @@ function App() {
     setActiveTab('edit');
   };
 
-  // NEW: Start viewing details
   const startDetails = (user) => {
     setSelectedUser(user);
     setActiveTab('details');
@@ -158,7 +257,6 @@ function App() {
     u.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // NEW: Render user list for followers/following (compact)
   const renderUserList = (userList, title) => (
     <div>
       <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#111827', marginBottom: '1rem' }}>{title}</h3>
@@ -179,6 +277,91 @@ function App() {
     </div>
   );
 
+  // Login screen
+  if (!isLoggedIn) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ maxWidth: '28rem', width: '100%', margin: '0 auto', padding: '1.5rem' }}>
+          <div style={{ 
+            backgroundColor: 'white', 
+            borderRadius: '0.5rem', 
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+            padding: '2rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', justifyContent: 'center' }}>
+              <User style={{ width: '2rem', height: '2rem', color: '#9333ea' }} />
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#111827' }}>Login</h1>
+            </div>
+
+            {loginError && (
+              <div style={{
+                backgroundColor: '#fee2e2',
+                border: '1px solid #fecaca',
+                borderRadius: '0.5rem',
+                padding: '1rem',
+                marginBottom: '1.5rem',
+                color: '#991b1b',
+                fontSize: '0.875rem'
+              }}>
+                <strong>Error:</strong> {loginError}
+              </div>
+            )}
+
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                  Username
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.5rem',
+                    fontSize: '1rem',
+                    outline: 'none'
+                  }}
+                  placeholder="Enter your username"
+                  onFocus={(e) => e.target.style.borderColor = '#9333ea'}
+                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  backgroundColor: '#9333ea',
+                  color: 'white',
+                  padding: '0.75rem',
+                  borderRadius: '0.5rem',
+                  fontWeight: '500',
+                  border: 'none',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.6 : 1,
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => !loading && (e.target.style.backgroundColor = '#7e22ce')}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#9333ea'}
+              >
+                {loading ? 'Logging in...' : 'Login'}
+              </button>
+            </form>
+
+            <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '1rem', textAlign: 'center' }}>
+              Demo: Try logging in with any existing username in the system
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
       <div style={{ maxWidth: '64rem', margin: '0 auto', padding: '1.5rem' }}>
@@ -188,13 +371,39 @@ function App() {
           borderRadius: '0.5rem', 
           boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
           padding: '1.5rem',
-          marginBottom: '1.5rem'
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <User style={{ width: '2rem', height: '2rem', color: '#9333ea' }} />
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#111827' }}>User Management</h1>
+            <div>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#111827' }}>User Management</h1>
+              <p style={{ fontSize: '0.875rem', color: '#6b7280', margin: 0 }}>Logged in as <strong>@{currentUser.username}</strong></p>
+            </div>
           </div>
-          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>Manage users for your Instagram-like application</p>
+          <button
+            onClick={handleLogout}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              backgroundColor: '#fee2e2',
+              color: '#991b1b',
+              padding: '0.5rem 1rem',
+              borderRadius: '0.5rem',
+              fontWeight: '500',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = '#fecaca'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = '#fee2e2'}
+          >
+            <LogOut style={{ width: '1.25rem', height: '1.25rem' }} />
+            Logout
+          </button>
         </div>
 
         {/* Error Display */}
@@ -391,8 +600,27 @@ function App() {
                           </div>
                         </div>
                         
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          {/* NEW: View Details Button */}
+                        <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column' }}>
+                          {currentUser.id !== user.id && (
+                            <button
+                              onClick={() => followingMap[user.id] ? handleUnfollow(user.id) : handleFollow(user.id)}
+                              style={{
+                                backgroundColor: followingMap[user.id] ? '#ec4899' : '#9333ea',
+                                color: 'white',
+                                padding: '0.5rem 1rem',
+                                borderRadius: '0.5rem',
+                                fontWeight: '500',
+                                border: 'none',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.2s',
+                                fontSize: '0.875rem'
+                              }}
+                              onMouseEnter={(e) => e.target.style.backgroundColor = followingMap[user.id] ? '#be185d' : '#7e22ce'}
+                              onMouseLeave={(e) => e.target.style.backgroundColor = followingMap[user.id] ? '#ec4899' : '#9333ea'}
+                            >
+                              {followingMap[user.id] ? 'Unfollow' : 'Follow'}
+                            </button>
+                          )}
                           <button
                             onClick={() => startDetails(user)}
                             style={{
@@ -409,22 +637,24 @@ function App() {
                           >
                             <Eye style={{ width: '1.25rem', height: '1.25rem' }} />
                           </button>
-                          <button
-                            onClick={() => startEdit(user)}
-                            style={{
-                              color: '#9333ea',
-                              padding: '0.5rem',
-                              borderRadius: '0.5rem',
-                              border: 'none',
-                              background: 'none',
-                              cursor: 'pointer',
-                              transition: 'background-color 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.target.style.backgroundColor = '#faf5ff'}
-                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                          >
-                            <Edit style={{ width: '1.25rem', height: '1.25rem' }} />
-                          </button>
+                          {currentUser.id === user.id && (
+                            <button
+                              onClick={() => startEdit(user)}
+                              style={{
+                                color: '#9333ea',
+                                padding: '0.5rem',
+                                borderRadius: '0.5rem',
+                                border: 'none',
+                                background: 'none',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.target.style.backgroundColor = '#faf5ff'}
+                              onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                            >
+                              <Edit style={{ width: '1.25rem', height: '1.25rem' }} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -439,7 +669,7 @@ function App() {
               </div>
             )}
 
-            {/* NEW: User Details Tab */}
+            {/* User Details Tab */}
             {activeTab === 'details' && selectedUser && !detailsLoading && (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -477,7 +707,6 @@ function App() {
                     <span style={{ color: '#6b7280' }}>following</span>
                   </div>
                 </div>
-                {/* NEW: Sub-tabs for Followers/Following */}
                 <div style={{ borderBottom: '1px solid #e5e7eb', marginBottom: '1rem' }}>
                   <button
                     onClick={() => setActiveSubTab('followers')}

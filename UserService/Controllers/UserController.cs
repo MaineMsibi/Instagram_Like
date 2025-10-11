@@ -238,80 +238,144 @@ namespace UserService.Controllers
                 return StatusCode(500, "Internal server error");
             }
         }
+        // NEW: POST /api/Users/{userId}/follow/{targetUserId} - Follow a user
+        [HttpPost("{userId}/follow/{targetUserId}")]
+        public async Task<IActionResult> FollowUser(int userId, int targetUserId)
+        {
+            try
+            {
+                // Prevent user from following themselves
+                if (userId == targetUserId)
+                    return BadRequest("You cannot follow yourself");
+
+                await using var session = _driver.AsyncSession();
+
+                // Check if both users exist and create follow relationship
+                var result = await session.RunAsync(@"
+                    MATCH (u:User {user_id: $userId}), (t:User {user_id: $targetUserId})
+                    MERGE (u)-[:FOLLOWS]->(t)
+                    RETURN u.user_id AS userId",
+                    new { userId, targetUserId });
+
+                var records = await result.ToListAsync();
+                if (records.Count == 0)
+                    return NotFound("One or both users not found");
+
+                return Ok(new { message = "Followed successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error following user {targetUserId} by user {userId}", targetUserId, userId);
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        // NEW: POST /api/Users/{userId}/unfollow/{targetUserId} - Unfollow a user
+        [HttpPost("{userId}/unfollow/{targetUserId}")]
+        public async Task<IActionResult> UnfollowUser(int userId, int targetUserId)
+        {
+            try
+            {
+                // Prevent user from unfollowing themselves
+                if (userId == targetUserId)
+                    return BadRequest("You cannot unfollow yourself");
+
+                await using var session = _driver.AsyncSession();
+
+                // Delete the follow relationship if it exists
+                var result = await session.RunAsync(@"
+                    MATCH (u:User {user_id: $userId})-[rel:FOLLOWS]->(t:User {user_id: $targetUserId})
+                    DELETE rel
+                    RETURN COUNT(rel) AS deletedCount",
+                    new { userId, targetUserId });
+
+                var record = await result.SingleAsync();
+                var deletedCount = record["deletedCount"].As<int>();
+
+                if (deletedCount == 0)
+                    return BadRequest("Follow relationship not found");
+
+                return Ok(new { message = "Unfollowed successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error unfollowing user {targetUserId} by user {userId}", targetUserId, userId);
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
         // NEW: GET /api/Users/{userId}/followers - List followers
-[HttpGet("{userId}/followers")]
-public async Task<IActionResult> GetFollowers(int userId)
-{
-    try
-    {
-        await using var session = _driver.AsyncSession();
-        var result = await session.RunAsync(@"
-            MATCH (f:User)-[:FOLLOWS]->(u:User {user_id: $userId})
-            RETURN f.user_id AS userId, 
-                   f.username AS username, 
-                   f.full_name AS name, 
-                   f.email AS email,
-                   f.bio AS bio
-            ORDER BY f.username",
-            new { userId });
-
-        var records = await result.ToListAsync();
-        var followers = records.Select(r => new
+        [HttpGet("{userId}/followers")]
+        public async Task<IActionResult> GetFollowers(int userId)
         {
-            Id = r["userId"].As<int>(),
-            Username = r["username"].As<string>(),
-            Name = r["name"]?.As<string>() ?? "",
-            Email = r["email"]?.As<string>() ?? "",
-            Bio = r["bio"]?.As<string>() ?? ""
-        }).ToList();
+            try
+            {
+                await using var session = _driver.AsyncSession();
+                var result = await session.RunAsync(@"
+                    MATCH (f:User)-[:FOLLOWS]->(u:User {user_id: $userId})
+                    RETURN f.user_id AS userId, 
+                        f.username AS username, 
+                        f.full_name AS name, 
+                        f.email AS email,
+                        f.bio AS bio
+                    ORDER BY f.username",
+                    new { userId });
 
-        return Ok(followers);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error fetching followers for user {userId}", userId);
-        return StatusCode(500, "Internal server error");
-    }
-}
+                var records = await result.ToListAsync();
+                var followers = records.Select(r => new
+                {
+                    Id = r["userId"].As<int>(),
+                    Username = r["username"].As<string>(),
+                    Name = r["name"]?.As<string>() ?? "",
+                    Email = r["email"]?.As<string>() ?? "",
+                    Bio = r["bio"]?.As<string>() ?? ""
+                }).ToList();
 
-// NEW: GET /api/Users/{userId}/following - List following
-[HttpGet("{userId}/following")]
-public async Task<IActionResult> GetFollowing(int userId)
-{
-    try
-    {
-        await using var session = _driver.AsyncSession();
-        var result = await session.RunAsync(@"
-            MATCH (u:User {user_id: $userId})-[:FOLLOWS]->(f:User)
-            RETURN f.user_id AS userId, 
-                   f.username AS username, 
-                   f.full_name AS name, 
-                   f.email AS email,
-                   f.bio AS bio
-            ORDER BY f.username",
-            new { userId });
+                return Ok(followers);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching followers for user {userId}", userId);
+                return StatusCode(500, "Internal server error");
+            }
+        }
 
-        var records = await result.ToListAsync();
-        var following = records.Select(r => new
+        // NEW: GET /api/Users/{userId}/following - List following
+        [HttpGet("{userId}/following")]
+        public async Task<IActionResult> GetFollowing(int userId)
         {
-            Id = r["userId"].As<int>(),
-            Username = r["username"].As<string>(),
-            Name = r["name"]?.As<string>() ?? "",
-            Email = r["email"]?.As<string>() ?? "",
-            Bio = r["bio"]?.As<string>() ?? ""
-        }).ToList();
+            try
+            {
+                await using var session = _driver.AsyncSession();
+                var result = await session.RunAsync(@"
+                    MATCH (u:User {user_id: $userId})-[:FOLLOWS]->(f:User)
+                    RETURN f.user_id AS userId, 
+                        f.username AS username, 
+                        f.full_name AS name, 
+                        f.email AS email,
+                        f.bio AS bio
+                    ORDER BY f.username",
+                    new { userId });
 
-        return Ok(following);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error fetching following for user {userId}", userId);
-        return StatusCode(500, "Internal server error");
-    }
-}
-    }
+                var records = await result.ToListAsync();
+                var following = records.Select(r => new
+                {
+                    Id = r["userId"].As<int>(),
+                    Username = r["username"].As<string>(),
+                    Name = r["name"]?.As<string>() ?? "",
+                    Email = r["email"]?.As<string>() ?? "",
+                    Bio = r["bio"]?.As<string>() ?? ""
+                }).ToList();
 
-    
+                return Ok(following);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching following for user {userId}", userId);
+                return StatusCode(500, "Internal server error");
+            }
+        }
+    }
 
     // FIXED: DTOs - Made Email nullable (string?) to avoid binding fails if omitted
     public record CreateUserDto(string Name, string Username, string Email, string? Bio);

@@ -3,26 +3,44 @@
     {
       "DownstreamPathTemplate": "/api/Users/{userId}",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 5001
-        }
-      ],
+      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
       "UpstreamPathTemplate": "/users/{userId}",
-      "UpstreamHttpMethod": [ "GET", "PUT" ]
+      "UpstreamHttpMethod": ["GET", "PUT"]
     },
     {
       "DownstreamPathTemplate": "/api/Users",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 5001
-        }
-      ],
+      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
       "UpstreamPathTemplate": "/users",
-      "UpstreamHttpMethod": [ "GET", "POST" ]
+      "UpstreamHttpMethod": ["GET", "POST"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/Users/{userId}/followers",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
+      "UpstreamPathTemplate": "/users/{userId}/followers",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/Users/{userId}/following",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
+      "UpstreamPathTemplate": "/users/{userId}/following",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/Users/{userId}/follow/{targetUserId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
+      "UpstreamPathTemplate": "/users/{userId}/follow/{targetUserId}",
+      "UpstreamHttpMethod": ["POST"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/Users/{userId}/unfollow/{targetUserId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
+      "UpstreamPathTemplate": "/users/{userId}/unfollow/{targetUserId}",
+      "UpstreamHttpMethod": ["POST"]
     }
   ],
   "GlobalConfiguration": {
