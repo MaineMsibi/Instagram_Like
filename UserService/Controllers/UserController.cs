@@ -1,7 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Neo4j.Driver;
-using System.Text.Json;  // For logging DTO if needed
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace UserService.Controllers
 {
@@ -11,281 +15,365 @@ namespace UserService.Controllers
     {
         private readonly IDriver _driver;
         private readonly ILogger<UsersController> _logger;
+        private readonly JwtSettings _jwtSettings;
 
-        public UsersController(IDriver driver, ILogger<UsersController> logger)
+        public UsersController(IDriver driver, ILogger<UsersController> logger, IOptions<JwtSettings> jwtSettings)
         {
             _driver = driver;
             _logger = logger;
+            _jwtSettings = jwtSettings.Value;
         }
 
-        // UPDATED: GET /api/Users/{userId} - Now includes password
-[HttpGet("{userId}")]
-public async Task<IActionResult> GetUser(int userId)
-{
-    try
-    {
-        await using var session = _driver.AsyncSession();
-        var result = await session.RunAsync(@"
-            MATCH (u:User {user_id: $userId})
-            OPTIONAL MATCH (u)-[:FOLLOWS]->(following:User)
-            WITH u, count(following) AS followingCount
-            OPTIONAL MATCH (f:User)-[:FOLLOWS]->(u)
-            WITH u, followingCount, count(f) AS followersCount
-            RETURN u.user_id AS userId, 
-                   u.username AS username, 
-                   u.full_name AS name, 
-                   u.email AS email,
-                   u.password AS password,
-                   u.joined AS joined, 
-                   u.bio AS bio,
-                   followingCount,
-                   followersCount",
-            new { userId });
-
-        var records = await result.ToListAsync();
-        if (records.Count == 0)
-            return NotFound();
-
-        var record = records[0];
-        var user = new
+        // Health Check Endpoint (no auth required)
+        [HttpGet("health")]
+        [AllowAnonymous]
+        public IActionResult HealthCheck()
         {
-            Id = record["userId"].As<int>(),
-            Username = record["username"].As<string>(),
-            Email = record["email"]?.As<string>() ?? "",
-            Name = record["name"]?.As<string>() ?? "",
-            Password = record["password"]?.As<string>() ?? "",
-            Bio = record["bio"]?.As<string>() ?? "",
-            Followers = record["followersCount"].As<int>(),
-            Following = record["followingCount"].As<int>()
-        };
-        return Ok(user);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error fetching user {userId}", userId);
-        return StatusCode(500, "Internal server error");
-    }
-}
-
-        // UPDATED: GET /api/Users - Now includes password
-[HttpGet]
-public async Task<IActionResult> GetUsers()
-{
-    try
-    {
-        await using var session = _driver.AsyncSession();
-        var result = await session.RunAsync(@"
-            MATCH (u:User)
-            OPTIONAL MATCH (u)-[:FOLLOWS]->(following:User)
-            WITH u, count(following) AS followingCount
-            OPTIONAL MATCH (f:User)-[:FOLLOWS]->(u)
-            WITH u, followingCount, count(f) AS followersCount
-            RETURN u.user_id AS userId, 
-                   u.username AS username, 
-                   u.full_name AS name, 
-                   u.email AS email,
-                   u.password AS password,
-                   u.joined AS joined, 
-                   u.bio AS bio,
-                   followingCount,
-                   followersCount
-            ORDER BY u.user_id");
-
-        var records = await result.ToListAsync();
-        var users = records.Select(r => new
-        {
-            Id = r["userId"].As<int>(),
-            Username = r["username"].As<string>(),
-            Email = r["email"]?.As<string>() ?? "",
-            Name = r["name"]?.As<string>() ?? "",
-            Password = r["password"]?.As<string>() ?? "",
-            Bio = r["bio"]?.As<string>() ?? "",
-            Followers = r["followersCount"].As<int>(),
-            Following = r["followingCount"].As<int>()
-        }).ToList();
-
-        return Ok(users);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error fetching users");
-        return StatusCode(500, "Internal server error");
-    }
-}
-
-
-        // UPDATED: POST /api/Users - Now includes password
-[HttpPost]
-public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
-{
-    try
-    {
-        // Validate input
-        if (string.IsNullOrWhiteSpace(dto.Username))
-            return BadRequest("Username is required");
-        if (string.IsNullOrWhiteSpace(dto.Email))
-            return BadRequest("Email is required");
-        if (string.IsNullOrWhiteSpace(dto.Password))
-            return BadRequest("Password is required");
-
-        await using var session = _driver.AsyncSession();
-
-        // Step 1: Get the next available ID
-        var maxIdResult = await session.RunAsync(@"
-            MATCH (u:User)
-            RETURN MAX(u.user_id) AS maxId");
-
-        var maxIdRecord = await maxIdResult.SingleAsync();
-        var maxId = maxIdRecord["maxId"].As<int?>();
-        var nextId = (maxId ?? 0) + 1;
-
-        // Step 2: Create the user with the next ID
-        var result = await session.RunAsync(@"
-            CREATE (newUser:User {
-                user_id: $userId, 
-                username: $username, 
-                full_name: $name, 
-                email: $email,
-                password: $password,
-                joined: datetime(), 
-                bio: $bio
-            })
-            RETURN newUser.user_id AS userId, 
-                   newUser.username AS username, 
-                   newUser.full_name AS name, 
-                   newUser.email AS email,
-                   newUser.password AS password,
-                   newUser.joined AS joined, 
-                   newUser.bio AS bio",
-            new
+            return Ok(new
             {
-                userId = nextId,
-                username = dto.Username,
-                name = dto.Name ?? dto.Username,
-                email = dto.Email,
-                password = dto.Password,
-                bio = dto.Bio ?? ""
+                status = "healthy",
+                timestamp = DateTime.UtcNow,
+                service = "UserService"
             });
+        }
 
-        var record = await result.SingleAsync();
 
-        var newUser = new
+        // NEW: POST /api/Users/login - Login with JWT
+        [HttpPost("login")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
-            Id = record["userId"].As<int>(),
-            Username = record["username"].As<string>(),
-            Email = record["email"].As<string>(),
-            Name = record["name"].As<string>(),
-            Password = record["password"].As<string>(),
-            Bio = record["bio"]?.As<string>() ?? "",
-            Followers = 0,
-            Following = 0
-        };
+            try
+            {
+                if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password))
+                    return BadRequest(new { message = "Username and password required" });
 
-        return CreatedAtAction(nameof(GetUser), new { userId = newUser.Id }, newUser);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error creating user");
-        return StatusCode(500, $"Internal server error: {ex.Message}");
-    }
-}
+                await using var session = _driver.AsyncSession();
+                var result = await session.RunAsync(@"
+                    MATCH (u:User {username: $username, password: $password})
+                    OPTIONAL MATCH (u)-[:FOLLOWS]->(following:User)
+                    WITH u, count(following) AS followingCount
+                    OPTIONAL MATCH (f:User)-[:FOLLOWS]->(u)
+                    WITH u, followingCount, count(f) AS followersCount
+                    RETURN u.user_id AS userId, 
+                           u.username AS username, 
+                           u.full_name AS name, 
+                           u.email AS email,
+                           u.password AS password,
+                           u.bio AS bio,
+                           followingCount,
+                           followersCount",
+                    new { username = dto.Username, password = dto.Password });
+
+                var records = await result.ToListAsync();
+                if (records.Count == 0)
+                {
+                    _logger.LogWarning("Failed login attempt for username: {username}", dto.Username);
+                    return Unauthorized(new { message = "Invalid username or password" });
+                }
+
+                var record = records[0];
+                var user = new
+                {
+                    Id = record["userId"].As<int>(),
+                    Username = record["username"].As<string>(),
+                    Email = record["email"]?.As<string>() ?? "",
+                    Name = record["name"]?.As<string>() ?? "",
+                    Bio = record["bio"]?.As<string>() ?? "",
+                    Followers = record["followersCount"].As<int>(),
+                    Following = record["followingCount"].As<int>()
+                };
+
+                // Generate JWT token
+                var token = GenerateJwtToken(user.Id, user.Username, user.Email);
+
+                _logger.LogInformation("User {username} logged in successfully", dto.Username);
+
+                return Ok(new
+                {
+                    message = "Login successful",
+                    token = token,
+                    user = user
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during login");
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+
+        // GET /api/Users/{userId} - Requires authentication
+        [HttpGet("{userId}")]
+        [Authorize]
+        public async Task<IActionResult> GetUser(int userId)
+        {
+            try
+            {
+                await using var session = _driver.AsyncSession();
+                var result = await session.RunAsync(@"
+                    MATCH (u:User {user_id: $userId})
+                    OPTIONAL MATCH (u)-[:FOLLOWS]->(following:User)
+                    WITH u, count(following) AS followingCount
+                    OPTIONAL MATCH (f:User)-[:FOLLOWS]->(u)
+                    WITH u, followingCount, count(f) AS followersCount
+                    RETURN u.user_id AS userId, 
+                           u.username AS username, 
+                           u.full_name AS name, 
+                           u.email AS email,
+                           u.password AS password,
+                           u.joined AS joined, 
+                           u.bio AS bio,
+                           followingCount,
+                           followersCount",
+                    new { userId });
+
+                var records = await result.ToListAsync();
+                if (records.Count == 0)
+                    return NotFound();
+
+                var record = records[0];
+                var user = new
+                {
+                    Id = record["userId"].As<int>(),
+                    Username = record["username"].As<string>(),
+                    Email = record["email"]?.As<string>() ?? "",
+                    Name = record["name"]?.As<string>() ?? "",
+                    Password = record["password"]?.As<string>() ?? "",
+                    Bio = record["bio"]?.As<string>() ?? "",
+                    Followers = record["followersCount"].As<int>(),
+                    Following = record["followingCount"].As<int>()
+                };
+                return Ok(user);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching user {userId}", userId);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+
+
+        // GET /api/Users - Requires authentication
+        [HttpGet]
+        //[Authorize]
+        public async Task<IActionResult> GetUsers()
+        {
+            try
+            {
+                await using var session = _driver.AsyncSession();
+                var result = await session.RunAsync(@"
+                    MATCH (u:User)
+                    OPTIONAL MATCH (u)-[:FOLLOWS]->(following:User)
+                    WITH u, count(following) AS followingCount
+                    OPTIONAL MATCH (f:User)-[:FOLLOWS]->(u)
+                    WITH u, followingCount, count(f) AS followersCount
+                    RETURN u.user_id AS userId, 
+                           u.username AS username, 
+                           u.full_name AS name, 
+                           u.email AS email,
+                           u.password AS password,
+                           u.joined AS joined, 
+                           u.bio AS bio,
+                           followingCount,
+                           followersCount
+                    ORDER BY u.user_id");
+
+                var records = await result.ToListAsync();
+                var users = records.Select(r => new
+                {
+                    Id = r["userId"].As<int>(),
+                    Username = r["username"].As<string>(),
+                    Email = r["email"]?.As<string>() ?? "",
+                    Name = r["name"]?.As<string>() ?? "",
+                    Password = r["password"]?.As<string>() ?? "",
+                    Bio = r["bio"]?.As<string>() ?? "",
+                    Followers = r["followersCount"].As<int>(),
+                    Following = r["followingCount"].As<int>()
+                }).ToList();
+
+                return Ok(users);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching users");
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
+
+
+        // POST /api/Users - Create user (no auth required)
+        [HttpPost]
+        [AllowAnonymous]
+        public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(dto.Username))
+                    return BadRequest("Username is required");
+                if (string.IsNullOrWhiteSpace(dto.Email))
+                    return BadRequest("Email is required");
+                if (string.IsNullOrWhiteSpace(dto.Password))
+                    return BadRequest("Password is required");
+
+                await using var session = _driver.AsyncSession();
+
+                var maxIdResult = await session.RunAsync(@"
+                    MATCH (u:User)
+                    RETURN MAX(u.user_id) AS maxId");
+
+                var maxIdRecord = await maxIdResult.SingleAsync();
+                var maxId = maxIdRecord["maxId"].As<int?>();
+                var nextId = (maxId ?? 0) + 1;
+
+                var result = await session.RunAsync(@"
+                    CREATE (newUser:User {
+                        user_id: $userId, 
+                        username: $username, 
+                        full_name: $name, 
+                        email: $email,
+                        password: $password,
+                        joined: datetime(), 
+                        bio: $bio
+                    })
+                    RETURN newUser.user_id AS userId, 
+                           newUser.username AS username, 
+                           newUser.full_name AS name, 
+                           newUser.email AS email,
+                           newUser.password AS password,
+                           newUser.joined AS joined, 
+                           newUser.bio AS bio",
+                    new
+                    {
+                        userId = nextId,
+                        username = dto.Username,
+                        name = dto.Name ?? dto.Username,
+                        email = dto.Email,
+                        password = dto.Password,
+                        bio = dto.Bio ?? ""
+                    });
+
+                var record = await result.SingleAsync();
+
+                var newUser = new
+                {
+                    Id = record["userId"].As<int>(),
+                    Username = record["username"].As<string>(),
+                    Email = record["email"].As<string>(),
+                    Name = record["name"].As<string>(),
+                    Password = record["password"].As<string>(),
+                    Bio = record["bio"]?.As<string>() ?? "",
+                    Followers = 0,
+                    Following = 0
+                };
+
+                _logger.LogInformation("User {username} created successfully", dto.Username);
+                return CreatedAtAction(nameof(GetUser), new { userId = newUser.Id }, newUser);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating user");
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
 
         // UPDATED: PUT /api/Users/{userId} - Now includes password
-[HttpPut("{userId}")]
-public async Task<IActionResult> UpdateUser(int userId, [FromBody] UpdateUserDto dto)
-{
-    try
-    {
-        // Validate input
-        if (string.IsNullOrWhiteSpace(dto.Username))
-            return BadRequest("Username is required");
-        if (string.IsNullOrWhiteSpace(dto.Email ?? ""))
-            return BadRequest("Email is required");
-        if (string.IsNullOrWhiteSpace(dto.Password ?? ""))
-            return BadRequest("Password is required");
-
-        // Optional: Log incoming DTO for debugging (remove later)
-        _logger.LogInformation("Update payload: {Payload}", JsonSerializer.Serialize(dto));
-
-        await using var session = _driver.AsyncSession();
-        var result = await session.RunAsync(@"
-            MATCH (u:User {user_id: $userId})
-            SET u.username = $username, 
-                u.full_name = $name, 
-                u.email = $email,
-                u.password = $password,
-                u.bio = $bio
-            WITH u
-            OPTIONAL MATCH (u)-[:FOLLOWS]->(following:User)
-            WITH u, count(following) AS followingCount
-            OPTIONAL MATCH (f:User)-[:FOLLOWS]->(u)
-            WITH u, followingCount, count(f) AS followersCount
-            RETURN u.user_id AS userId, 
-                u.username AS username, 
-                u.full_name AS name, 
-                u.email AS email,
-                u.password AS password,
-                u.bio AS bio,
-                followingCount,
-                followersCount",
-            new { userId, username = dto.Username, name = dto.Name ?? dto.Username, email = dto.Email ?? "", password = dto.Password ?? "", bio = dto.Bio ?? "" });
-
-        var records = await result.ToListAsync();
-        if (records.Count == 0)
-            return NotFound($"User with ID {userId} not found");
-
-        var record = records[0];
-        var updatedUser = new
+        // PUT /api/Users/{userId} - Requires authentication
+        [HttpPut("{userId}")]
+        [Authorize]
+        public async Task<IActionResult> UpdateUser(int userId, [FromBody] UpdateUserDto dto)
         {
-            Id = record["userId"].As<int>(),
-            Username = record["username"].As<string>(),
-            Email = record["email"]?.As<string>() ?? "",
-            Name = record["name"]?.As<string>() ?? "",
-            Password = record["password"]?.As<string>() ?? "",
-            Bio = record["bio"]?.As<string>() ?? "",
-            Followers = record["followersCount"].As<int>(),
-            Following = record["followingCount"].As<int>()
-        };
-        return Ok(updatedUser);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error updating user {userId}", userId);
-        return StatusCode(500, "Internal server error");
-    }
-}
+            try
+            {
+                if (string.IsNullOrWhiteSpace(dto.Username))
+                    return BadRequest("Username is required");
+                if (string.IsNullOrWhiteSpace(dto.Email ?? ""))
+                    return BadRequest("Email is required");
+                if (string.IsNullOrWhiteSpace(dto.Password ?? ""))
+                    return BadRequest("Password is required");
+
+                await using var session = _driver.AsyncSession();
+                var result = await session.RunAsync(@"
+                    MATCH (u:User {user_id: $userId})
+                    SET u.username = $username, 
+                        u.full_name = $name, 
+                        u.email = $email,
+                        u.password = $password,
+                        u.bio = $bio
+                    WITH u
+                    OPTIONAL MATCH (u)-[:FOLLOWS]->(following:User)
+                    WITH u, count(following) AS followingCount
+                    OPTIONAL MATCH (f:User)-[:FOLLOWS]->(u)
+                    WITH u, followingCount, count(f) AS followersCount
+                    RETURN u.user_id AS userId, 
+                        u.username AS username, 
+                        u.full_name AS name, 
+                        u.email AS email,
+                        u.password AS password,
+                        u.bio AS bio,
+                        followingCount,
+                        followersCount",
+                    new { userId, username = dto.Username, name = dto.Name ?? dto.Username, email = dto.Email ?? "", password = dto.Password ?? "", bio = dto.Bio ?? "" });
+
+                var records = await result.ToListAsync();
+                if (records.Count == 0)
+                    return NotFound($"User with ID {userId} not found");
+
+                var record = records[0];
+                var updatedUser = new
+                {
+                    Id = record["userId"].As<int>(),
+                    Username = record["username"].As<string>(),
+                    Email = record["email"]?.As<string>() ?? "",
+                    Name = record["name"]?.As<string>() ?? "",
+                    Password = record["password"]?.As<string>() ?? "",
+                    Bio = record["bio"]?.As<string>() ?? "",
+                    Followers = record["followersCount"].As<int>(),
+                    Following = record["followingCount"].As<int>()
+                };
+
+                _logger.LogInformation("User {userId} updated successfully", userId);
+                return Ok(updatedUser);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating user {userId}", userId);
+                return StatusCode(500, new { message = "Internal server error" });
+            }
+        }
 
         // NEW: POST /api/Users/{userId}/follow/{targetUserId} - Follow a user
-[HttpPost("{userId}/follow/{targetUserId}")]
-public async Task<IActionResult> FollowUser(int userId, int targetUserId)
-{
-    try
-    {
-        // Prevent user from following themselves
-        if (userId == targetUserId)
-            return BadRequest("You cannot follow yourself");
+        [HttpPost("{userId}/follow/{targetUserId}")]
+        [Authorize]
+        public async Task<IActionResult> FollowUser(int userId, int targetUserId)
+        {
+            try
+            {
+                // Prevent user from following themselves
+                if (userId == targetUserId)
+                    return BadRequest("You cannot follow yourself");
 
-        await using var session = _driver.AsyncSession();
+                await using var session = _driver.AsyncSession();
 
-        // Check if both users exist and create follow relationship
-        var result = await session.RunAsync(@"
-            MATCH (u:User {user_id: $userId}), (t:User {user_id: $targetUserId})
-            MERGE (u)-[:FOLLOWS]->(t)
-            RETURN u.user_id AS userId",
-            new { userId, targetUserId });
+                // Check if both users exist and create follow relationship
+                var result = await session.RunAsync(@"
+                    MATCH (u:User {user_id: $userId}), (t:User {user_id: $targetUserId})
+                    MERGE (u)-[:FOLLOWS]->(t)
+                    RETURN u.user_id AS userId",
+                    new { userId, targetUserId });
 
-        var records = await result.ToListAsync();
-        if (records.Count == 0)
-            return NotFound("One or both users not found");
+                var records = await result.ToListAsync();
+                if (records.Count == 0)
+                    return NotFound("One or both users not found");
 
-        return Ok(new { message = "Followed successfully" });
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error following user {targetUserId} by user {userId}", targetUserId, userId);
-        return StatusCode(500, "Internal server error");
-    }
-}
+                return Ok(new { message = "Followed successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error following user {targetUserId} by user {userId}", targetUserId, userId);
+                return StatusCode(500, "Internal server error");
+            }
+        }
 
         // NEW: POST /api/Users/{userId}/unfollow/{targetUserId} - Unfollow a user
         [HttpPost("{userId}/unfollow/{targetUserId}")]
@@ -323,6 +411,7 @@ public async Task<IActionResult> FollowUser(int userId, int targetUserId)
 
         // NEW: GET /api/Users/{userId}/followers - List followers
         [HttpGet("{userId}/followers")]
+        [Authorize]
         public async Task<IActionResult> GetFollowers(int userId)
         {
             try
@@ -359,6 +448,7 @@ public async Task<IActionResult> FollowUser(int userId, int targetUserId)
 
         // NEW: GET /api/Users/{userId}/following - List following
         [HttpGet("{userId}/following")]
+        [Authorize]
         public async Task<IActionResult> GetFollowing(int userId)
         {
             try
@@ -392,9 +482,47 @@ public async Task<IActionResult> FollowUser(int userId, int targetUserId)
                 return StatusCode(500, "Internal server error");
             }
         }
+
+        // Helper method to generate JWT token
+         private string GenerateJwtToken(int userId, string username, string email)
+        {
+            if (string.IsNullOrEmpty(_jwtSettings.SecretKey))
+                throw new InvalidOperationException("JWT SecretKey is not configured");
+            
+            var key = Encoding.ASCII.GetBytes(_jwtSettings.SecretKey);
+            var tokenHandler = new JwtSecurityTokenHandler();
+
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                    new Claim(ClaimTypes.Name, username),
+                    new Claim(ClaimTypes.Email, email)
+                }),
+                Expires = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationMinutes),
+                Issuer = _jwtSettings.Issuer,
+                Audience = _jwtSettings.Audience,
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            };
+
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            return tokenHandler.WriteToken(token);
+        }
+
+
     }
 
     // FIXED: DTOs - Made Email nullable (string?) to avoid binding fails if omitted
     public record CreateUserDto(string Name, string Username, string Email, string Password, string? Bio);
     public record UpdateUserDto(string Name, string Username, string? Email, string? Password, string? Bio); // Nullable Email
+    public record LoginDto(string Username, string Password);
+
+    public class JwtSettings
+    {
+        public string? SecretKey { get; set; }
+        public string? Issuer { get; set; }
+        public string? Audience { get; set; }
+        public int ExpirationMinutes { get; set; }
+    }
 }

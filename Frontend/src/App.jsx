@@ -6,6 +6,7 @@ const API_BASE = 'http://localhost:5272';  // Ocelot Gateway
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [authToken, setAuthToken] = useState(localStorage.getItem('authToken') || null);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState(null);
   const [createUserPassword, setCreateUserPassword] = useState('');
@@ -971,7 +972,7 @@ function App() {
                     Password
                   </label>
                   <input
-                    type="text"
+                    type="password"
                     required
                     value={editUserPassword}
                     onChange={(e) => setEditUserPassword(e.target.value)}
@@ -987,6 +988,29 @@ function App() {
                     onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
                   />
                 </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={editUserPassword}
+                    onChange={(e) => setEditUserPassword(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 1rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.5rem',
+                      fontSize: '1rem',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#9333ea'}
+                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  />
+                </div>
+
                 <div>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
                     Bio
