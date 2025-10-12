@@ -5,9 +5,17 @@ const API_BASE = 'http://localhost:5272';
 
 function App() {
   // Auth state
-  const [authToken, setAuthToken] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [authToken, setAuthToken] = useState(() => {
+    // Initialize from localStorage
+    return localStorage.getItem('authToken') || null;
+  });
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return !!localStorage.getItem('authToken');
+  });
+  const [currentUser, setCurrentUser] = useState(() => {
+    const user = localStorage.getItem('currentUser');
+    return user ? JSON.parse(user) : null;
+  });
   const [showRegistration, setShowRegistration] = useState(false);
   
   // Form states
@@ -33,6 +41,23 @@ function App() {
   const [error, setError] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [loginError, setLoginError] = useState(null);
+
+  // Persist auth token and user to localStorage whenever they change
+  useEffect(() => {
+    if (authToken) {
+      localStorage.setItem('authToken', authToken);
+    } else {
+      localStorage.removeItem('authToken');
+    }
+  }, [authToken]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('currentUser');
+    }
+  }, [currentUser]);
 
   // Helper function to make authenticated requests
   const fetchWithAuth = async (url, options = {}) => {
@@ -85,11 +110,15 @@ function App() {
       }
 
       const data = await response.json();
+      
+      // Set state AND localStorage
       setAuthToken(data.token);
       setCurrentUser(data.user);
       setIsLoggedIn(true);
       setLoginForm({ username: '', password: '' });
-      fetchFollowingForUser(data.user.id);
+      
+      // Fetch following list using the token we just got
+      await fetchFollowingForUser(data.user.id, data.token);
     } catch (err) {
       setLoginError(err.message);
     } finally {
@@ -153,13 +182,13 @@ function App() {
     setLoginForm({ username: '', password: '' });
     setFollowingMap({});
     setActiveTab('view');
+    // localStorage is cleared by useEffect
   };
 
-  // Fetch users following list
-  const fetchFollowingForUser = async (userId) => {
+  // Fetch users following list - UPDATED to accept token as parameter
+  const fetchFollowingForUser = async (userId, token = authToken) => {
     try {
-      // Make sure authToken is available
-      if (!authToken) {
+      if (!token) {
         console.error('No auth token available');
         return;
       }
@@ -168,7 +197,7 @@ function App() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`  // ADD THIS
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -200,18 +229,12 @@ function App() {
 
   // Fetch followers
   const fetchFollowers = async (userId) => {
-  setDetailsLoading(true);
-  try {
-    const response = await fetch(`${API_BASE}/users/${userId}/followers`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`  // ADD THIS
-      }
-    });
-    if (!response.ok) throw new Error('Failed to fetch followers');
-    const data = await response.json();
-    setFollowers(data);
+    setDetailsLoading(true);
+    try {
+      const response = await fetchWithAuth(`${API_BASE}/users/${userId}/followers`);
+      if (!response.ok) throw new Error('Failed to fetch followers');
+      const data = await response.json();
+      setFollowers(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -223,13 +246,7 @@ function App() {
   const fetchFollowing = async (userId) => {
     setDetailsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/users/${userId}/following`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`  // ADD THIS
-        }
-      });
+      const response = await fetchWithAuth(`${API_BASE}/users/${userId}/following`);
       if (!response.ok) throw new Error('Failed to fetch following');
       const data = await response.json();
       setFollowing(data);
