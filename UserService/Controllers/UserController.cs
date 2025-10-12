@@ -17,11 +17,11 @@ namespace UserService.Controllers
         private readonly ILogger<UsersController> _logger;
         private readonly JwtSettings _jwtSettings;
 
-        public UsersController(IDriver driver, ILogger<UsersController> logger, IOptions<JwtSettings> jwtSettings)
+        public UsersController(IDriver driver, ILogger<UsersController> logger, JwtSettings jwtSettings)
         {
             _driver = driver;
             _logger = logger;
-            _jwtSettings = jwtSettings.Value;
+            _jwtSettings = jwtSettings;
         }
 
         // Health Check Endpoint (no auth required)
@@ -521,11 +521,4 @@ namespace UserService.Controllers
     public record UpdateUserDto(string Name, string Username, string? Email, string? Password, string? Bio);
     public record LoginDto(string Username, string Password);
 
-    public class JwtSettings
-    {
-        public string? SecretKey { get; set; }
-        public string? Issuer { get; set; }
-        public string? Audience { get; set; }
-        public int ExpirationMinutes { get; set; }
-    }
 }

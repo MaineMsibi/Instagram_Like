@@ -7,6 +7,7 @@ using Neo4j.Driver;
 using Serilog;
 using System.Text;
 using System.Text.Json;
+using UserService.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,12 +20,24 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-// JWT Configuration
+// Load JWT Settings from appsettings.json FIRST
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"] ?? "your-secret-key-at-least-32-characters-long-for-HS256";
-var issuer = jwtSettings["Issuer"] ?? "UserService";
-var audience = jwtSettings["Audience"] ?? "UserServiceUsers";
+var secretKey = jwtSettings["SecretKey"];
+var issuer = jwtSettings["Issuer"];
+var audience = jwtSettings["Audience"];
 var expirationMinutes = int.Parse(jwtSettings["ExpirationMinutes"] ?? "60");
+
+// Log for debugging
+Console.WriteLine($"[DEBUG] SecretKey: {(string.IsNullOrEmpty(secretKey) ? "NOT FOUND" : "OK")}");
+Console.WriteLine($"[DEBUG] Issuer: {issuer}");
+Console.WriteLine($"[DEBUG] Audience: {audience}");
+
+// Ensure we have a secret key
+if (string.IsNullOrEmpty(secretKey))
+{
+    secretKey = "your-secret-key-at-least-32-characters-long-for-HS256";
+    Log.Warning("JWT SecretKey not found in appsettings.json, using default");
+}
 
 var key = Encoding.ASCII.GetBytes(secretKey);
 
@@ -48,14 +61,19 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// CORS
+// CORS - Updated to include Ocelot gateway and localhost
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:5174", "http://localhost:5173")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy.WithOrigins(
+                "http://localhost:5173",      // Frontend 
+                "http://localhost:5174",      // Frontend alternative
+                "http://localhost:5272",      // Ocelot Gateway
+                "http://localhost:5001"       // UserService (for Swagger testing)
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
@@ -93,24 +111,24 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddHealthChecks();
 
 // Neo4j Driver
-var neo4jConfig2 = builder.Configuration.GetSection("Neo4j");
-var uri2 = neo4jConfig2["Uri"] ?? "bolt://localhost:7687";
-var username2 = neo4jConfig2["Username"] ?? "neo4j";
-var password2 = neo4jConfig2["Password"] ?? "password";
+var neo4jConfig = builder.Configuration.GetSection("Neo4j");
+var uri = neo4jConfig["Uri"] ?? "bolt://localhost:7687";
+var username = neo4jConfig["Username"] ?? "neo4j";
+var password = neo4jConfig["Password"] ?? "password";
 
-var driver = GraphDatabase.Driver(uri2, AuthTokens.Basic(username2, password2));
+var driver = GraphDatabase.Driver(uri, AuthTokens.Basic(username, password));
 builder.Services.AddSingleton<IDriver>(driver);
 
 // Controllers
 builder.Services.AddControllers();
 
-// Store JWT settings in DI for use in controllers
-builder.Services.Configure<JwtSettings>(options =>
+// IMPORTANT: Register JwtSettings as a singleton so it can be injected into controllers
+builder.Services.AddSingleton(new JwtSettings
 {
-    options.SecretKey = secretKey;
-    options.Issuer = issuer;
-    options.Audience = audience;
-    options.ExpirationMinutes = expirationMinutes;
+    SecretKey = secretKey,
+    Issuer = issuer,
+    Audience = audience,
+    ExpirationMinutes = expirationMinutes
 });
 
 var app = builder.Build();
@@ -127,7 +145,6 @@ app.UseCors();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
-
 
 // Health Check Endpoints
 app.MapHealthChecks("/health");
@@ -153,12 +170,3 @@ app.MapHealthChecks("/health/detailed", new HealthCheckOptions
 app.MapControllers();
 
 app.Run();
-
-// JWT Settings class
-public class JwtSettings
-{
-    public string? SecretKey { get; set; }
-    public string? Issuer { get; set; }
-    public string? Audience { get; set; }
-    public int ExpirationMinutes { get; set; }
-}
