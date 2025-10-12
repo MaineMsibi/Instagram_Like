@@ -158,7 +158,20 @@ function App() {
   // Fetch users following list
   const fetchFollowingForUser = async (userId) => {
     try {
-      const response = await fetchWithAuth(`${API_BASE}/users/${userId}/following`);
+      // Make sure authToken is available
+      if (!authToken) {
+        console.error('No auth token available');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/users/${userId}/following`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`  // ADD THIS
+        }
+      });
+      
       if (!response.ok) return;
       const data = await response.json();
       const map = {};
@@ -187,12 +200,18 @@ function App() {
 
   // Fetch followers
   const fetchFollowers = async (userId) => {
-    setDetailsLoading(true);
-    try {
-      const response = await fetchWithAuth(`${API_BASE}/users/${userId}/followers`);
-      if (!response.ok) throw new Error('Failed to fetch followers');
-      const data = await response.json();
-      setFollowers(data);
+  setDetailsLoading(true);
+  try {
+    const response = await fetch(`${API_BASE}/users/${userId}/followers`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`  // ADD THIS
+      }
+    });
+    if (!response.ok) throw new Error('Failed to fetch followers');
+    const data = await response.json();
+    setFollowers(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -204,7 +223,13 @@ function App() {
   const fetchFollowing = async (userId) => {
     setDetailsLoading(true);
     try {
-      const response = await fetchWithAuth(`${API_BASE}/users/${userId}/following`);
+      const response = await fetch(`${API_BASE}/users/${userId}/following`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`  // ADD THIS
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch following');
       const data = await response.json();
       setFollowing(data);
