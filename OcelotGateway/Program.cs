@@ -1,7 +1,25 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Ocelot.DependencyInjection;
 using Ocelot.Middleware;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer("Bearer", options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateAudience = false,
+            ValidateIssuer = false,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes("your-secret-key-at-least-32-characters-long-for-HS256")
+            ),
+            ValidateLifetime = true
+        };
+    });
 
 builder.Services.AddCors(options =>
 {
@@ -13,7 +31,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Add Ocelot configuration
+// Add Ocelot configuration - IMPORTANT: Remove ServiceDiscoveryProvider from ocelot.json
 builder.Configuration
     .SetBasePath(builder.Environment.ContentRootPath)
     .AddOcelot();
@@ -30,6 +48,9 @@ if (builder.Environment.IsDevelopment())
 var app = builder.Build();
 
 app.UseCors();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Use Ocelot middleware
 await app.UseOcelot();

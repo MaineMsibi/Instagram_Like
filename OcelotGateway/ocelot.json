@@ -1,49 +1,160 @@
 {
   "Routes": [
     {
-      "DownstreamPathTemplate": "/api/Users/{userId}",
+      "DownstreamPathTemplate": "/api/Users/login",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
-      "UpstreamPathTemplate": "/users/{userId}",
-      "UpstreamHttpMethod": ["GET", "PUT"]
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5001
+        }
+      ],
+      "UpstreamPathTemplate": "/users/login",
+      "UpstreamHttpMethod": ["POST"],
+      "AllowAnonymous": true
+    },
+    {
+      "DownstreamPathTemplate": "/api/Users/health",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5001
+        }
+      ],
+      "UpstreamPathTemplate": "/users/health",
+      "UpstreamHttpMethod": ["GET"],
+      "AllowAnonymous": true
     },
     {
       "DownstreamPathTemplate": "/api/Users",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5001
+        }
+      ],
       "UpstreamPathTemplate": "/users",
-      "UpstreamHttpMethod": ["GET", "POST"]
+      "UpstreamHttpMethod": ["GET", "POST"],
+      "AllowAnonymous": true,
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 100
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/Users/{userId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5001
+        }
+      ],
+      "UpstreamPathTemplate": "/users/{userId}",
+      "UpstreamHttpMethod": ["GET", "PUT"],
+      "AllowAnonymous": false,
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 100
+      }
     },
     {
       "DownstreamPathTemplate": "/api/Users/{userId}/followers",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5001
+        }
+      ],
       "UpstreamPathTemplate": "/users/{userId}/followers",
-      "UpstreamHttpMethod": ["GET"]
+      "UpstreamHttpMethod": ["GET"],
+      "AllowAnonymous": false,
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 100
+      }
     },
     {
       "DownstreamPathTemplate": "/api/Users/{userId}/following",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5001
+        }
+      ],
       "UpstreamPathTemplate": "/users/{userId}/following",
-      "UpstreamHttpMethod": ["GET"]
+      "UpstreamHttpMethod": ["GET"],
+      "AllowAnonymous": false,
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 100
+      }
     },
     {
       "DownstreamPathTemplate": "/api/Users/{userId}/follow/{targetUserId}",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5001
+        }
+      ],
       "UpstreamPathTemplate": "/users/{userId}/follow/{targetUserId}",
-      "UpstreamHttpMethod": ["POST"]
+      "UpstreamHttpMethod": ["POST"],
+      "AllowAnonymous": false,
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 100
+      }
     },
     {
       "DownstreamPathTemplate": "/api/Users/{userId}/unfollow/{targetUserId}",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{"Host": "localhost", "Port": 5001}],
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5001
+        }
+      ],
       "UpstreamPathTemplate": "/users/{userId}/unfollow/{targetUserId}",
-      "UpstreamHttpMethod": ["POST"]
+      "UpstreamHttpMethod": ["POST"],
+      "AllowAnonymous": false,
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 100
+      }
     }
   ],
   "GlobalConfiguration": {
-    "BaseUrl": "http://localhost:5272"
+    "BaseUrl": "http://localhost:5272",
+    "RateLimitOptions": {
+      "ClientIdHeader": "X-Client-Id",
+      "QuotaExceededMessage": "Rate limit exceeded. Maximum 100 requests per minute.",
+      "RateLimitCounterPrefix": "ocelot_rate_limit",
+      "DisableRateLimitHeaders": false,
+      "HttpStatusCode": 429
+    }
   }
 }
