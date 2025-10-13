@@ -134,11 +134,12 @@ builder.Services.AddSingleton(new JwtSettings
 var app = builder.Build();
 
 // Middleware
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
     app.UseSwagger();
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/swagger/v1/swagger.json", "UserService API v1"));
 }
+
 
 app.UseSerilogRequestLogging();
 app.UseCors();

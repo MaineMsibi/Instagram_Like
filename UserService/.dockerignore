@@ -1,0 +1,13 @@
+bin
+obj
+.vs
+.vscode
+.git
+.gitignore
+README.md
+*.log
+logs/
+node_modules
+npm-debug.log
+.env
+.env.local
