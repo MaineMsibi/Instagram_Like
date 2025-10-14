@@ -145,6 +145,71 @@
         "PeriodTimespan": 60,
         "Limit": 100
       }
+    },
+    {
+      "DownstreamPathTemplate": "/api/Notifications/health",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/notifications/health",
+      "UpstreamHttpMethod": ["GET"],
+      "AllowAnonymous": true
+    },
+    {
+      "DownstreamPathTemplate": "/api/Notifications",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/notifications",
+      "UpstreamHttpMethod": ["GET", "POST"],
+      "AllowAnonymous": false
+    },
+    {
+      "DownstreamPathTemplate": "/api/Notifications/user/{userId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/notifications/user/{userId}",
+      "UpstreamHttpMethod": ["GET"],
+      "AllowAnonymous": false
+    },
+    {
+      "DownstreamPathTemplate": "/api/Notifications/{notificationId}/read",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/notifications/{notificationId}/read",
+      "UpstreamHttpMethod": ["PUT"],
+      "AllowAnonymous": false
+    },
+    {
+      "DownstreamPathTemplate": "/api/Notifications/user/{userId}/unread-count",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/notifications/user/{userId}/unread-count",
+      "UpstreamHttpMethod": ["GET"],
+      "AllowAnonymous": false
     }
   ],
   "GlobalConfiguration": {
